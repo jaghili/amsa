@@ -11,9 +11,6 @@ import time
 
 class EMSA:
 
-  #
-  # Init EMSA class
-  #
   def __init__(self, OC, kmax, comm, settings, abn_mul = 1.0, rho_init = 1.0, ts = None):
 
     time_steps = comm.size if ts is None else ts
@@ -24,7 +21,6 @@ class EMSA:
     self.ts_init      = time_steps
     self.solve_method = settings['ode_integrator']
     self.optimizer    = settings['optimizer']
-    self.epstol       = 1e-3
     self.kmax         = kmax  
     self.comm         = comm
     self.test_points  = settings['adapt_max_nodes']
@@ -43,8 +39,6 @@ class EMSA:
     # Train variables
     self.u       = np.zeros(( self.mesh_U.n, self.oc.sizeu, 1 ))   # store current u
 
-    # History
-
     # trial flows
     self.all_X  = np.zeros( (self.mesh_X.n,) + OC.X0.shape )
     self.all_Xp = np.zeros( (self.mesh_X.n,) + OC.X0.shape )
@@ -58,10 +52,8 @@ class EMSA:
     self.all_Pp_test = np.zeros( (self.mesh_X.n,) + OC.X0_test.shape )
 
 
-  #
-  # Linear Interpolator
-  # 
-  def P1Interp(self, t, mesh, data, objectType='np'):
+  # Linear P1 Interpolator
+  def P1Interp(self, t, mesh, data):
     """
     t is a time
     mesh is the interpolation mesh 
@@ -84,27 +76,16 @@ class EMSA:
       t1, t2 = mesh.points[it], mesh.points[it+1]
       a      = (t - t1)/(t2 - t1)
       res    = (1-a) * data[it, :, :]  + a * data[it+1, :, :]
-
     elif t >= t2:
       res = data[-1, :, :]
-
     else:
-      res = data[0, :, :]               
-
-    # object type 
-    if objectType == 'tf':        
-      return tf.constant(res)
-    elif objectType == 'cp':
-      return cp.array(res)
-    elif objectType == 'np':
-      return res 
-    else:
-      raise Exception('[P1Interp] Incorrect type!')
+      res = data[0, :, :]
+      
+    return res 
 
 
   #
   # Integral of Regularizer
-  #
   def integralLagrangian(self):
     """
     returns the integral of L(X,U) over a given mesh
@@ -118,15 +99,12 @@ class EMSA:
   
   #
   # Forward-Backward Integrators 
-  #  
   def computeAllFlows(self):
     """
     Compute X, P and their derivatives
     """
     
     tic = time.time()
-
-    # Trial
     
     # Forward
     x0 = self.oc.X0
@@ -159,8 +137,6 @@ class EMSA:
 
   #
   # Lambda 
-  #
-  
   def computeLambda(self, unew, uold):
     """
     unew and uold have to be both of size (n, s, 1)
@@ -201,13 +177,13 @@ class EMSA:
     input: 
     - X and P  = (d, K) 
     - u = d*(d+1)
+
     output:
     dxH = (d, K)
     """
     d, K = X.shape
     u0 = np.zeros(self.oc.sizeu)
     
-    # (K, 1, d) @ (K, d, d) = (K, 1, d)
     _dxH = P.T.reshape(K, 1, d) @ self.oc.dxf(t, X, u) - self.oc.dxL(X, u, u0)  
     return _dxH.reshape(K, d).T
 
@@ -237,10 +213,10 @@ class EMSA:
     """
     u0 = np.zeros(self.oc.sizeu)
     
-    X  = self.P1Interp(t, self.mesh_X, self.all_X,  'np') # renvoie X(t) : l'interpolé dans l'intervalle [tk, tk+1]
-    Xp = self.P1Interp(t, self.mesh_X, self.all_Xp, 'np')
-    P  = self.P1Interp(t, self.mesh_P, self.all_P,  'np')
-    Pp = self.P1Interp(t, self.mesh_P, self.all_Pp, 'np')
+    X  = self.P1Interp(t, self.mesh_X, self.all_X) # renvoie X(t) : l'interpolé dans l'intervalle [tk, tk+1]
+    Xp = self.P1Interp(t, self.mesh_X, self.all_Xp)
+    P  = self.P1Interp(t, self.mesh_P, self.all_P)
+    Pp = self.P1Interp(t, self.mesh_P, self.all_Pp)
 
     d, K = X.shape
     
@@ -258,10 +234,10 @@ class EMSA:
     """
     u0 = np.zeros(self.oc.sizeu)
     
-    X  = self.P1Interp(t, self.mesh_X, self.all_X,  'np')
-    Xp = self.P1Interp(t, self.mesh_X, self.all_Xp, 'np')
-    P  = self.P1Interp(t, self.mesh_P, self.all_P,  'np')
-    Pp = self.P1Interp(t, self.mesh_P, self.all_Pp, 'np')
+    X  = self.P1Interp(t, self.mesh_X, self.all_X)
+    Xp = self.P1Interp(t, self.mesh_X, self.all_Xp)
+    P  = self.P1Interp(t, self.mesh_P, self.all_P)
+    Pp = self.P1Interp(t, self.mesh_P, self.all_Pp)
 
     d, K = X.shape
 
@@ -293,7 +269,6 @@ class EMSA:
     return adH
 
   
-# self.plot_aH(ax_aH1, imin, saveto = 'H_tmin.png')
   def plot_aH(self, fig, ax, it, NN = 25):
 
     # plot to ax
@@ -475,7 +450,6 @@ class EMSA:
                                     method='L-BFGS-B')
       theta_opt = sol.x
       niter += sol.nit            
-      # End
       
     #
     # BFGS + CMA-ES 
@@ -507,7 +481,6 @@ class EMSA:
   def train(self, settings, fig = None , Axes = None, cax = None):
     """
     mesh is a Mesh object 
-    kmax and epstol are real numbers
     """
     
     # init 
@@ -670,7 +643,7 @@ class EMSA:
       # End Hamiltonian maximization
       
       # reduce u over all processes
-      self.u      = comm.allreduce(self.u,      op = MPI.SUM)  # risky
+      self.u      = comm.allreduce(self.u,      op = MPI.SUM)
       self.init_u = comm.allreduce(self.init_u, op = MPI.SUM)
 
 
@@ -797,10 +770,8 @@ class EMSA:
       import matplotlib.pyplot as plt
       from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
-      #fig, [[ax_costs, ax_Lambda], [ax_test, ax_U], [ax_aH1, ax_aH2]] = plt.subplots(3, 2)
       fig, [[ax_costs, ax_Lambda], [ax_test, ax_U] ] = plt.subplots(2, 2)
       
-      #Axes = [[ax_costs, ax_Lambda], [ax_test, ax_U], [ax_aH1, ax_aH2]]
       Axes = [[ax_costs, ax_Lambda], [ax_test, ax_U]]
       if self.oc.N == 2 and self.oc.M == 1:        
         cax = make_axes_locatable(ax_test).append_axes("right", size="5%", pad="2%")

@@ -4,12 +4,6 @@ from scipy import optimize
 from ode   import ODEsolve2
 from Mesh import *
 
-# class Takagi:
-#   def __init__(self, a, n):
-
-#   def __call_(self, x):
-    
-
 # Mother class
 class OptimalControlProblem:
   def __init__(self):
@@ -30,7 +24,7 @@ class OptimalControlProblem:
 # u in (umin, umax)
 ############################################################################################
     
-class SimplestProblem(OptimalControlProblem):
+class OnedimProblem(OptimalControlProblem):
 
   def __init__(self, FinalTime):
     
