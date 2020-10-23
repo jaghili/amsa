@@ -40,8 +40,8 @@ class EMSA:
     self.u       = np.zeros(( self.mesh_U.n, self.oc.sizeu, 1 ))   # store current u
 
     # trial flows
-    self.all_X  = np.zeros( (self.mesh_X.n,) + OC.X0.shape )
-    self.all_Xp = np.zeros( (self.mesh_X.n,) + OC.X0.shape )
+    self.all_X  = np.zeros( (self.mesh_X.n,) + OC.X0.shape )    # size (n, d, K)
+    self.all_Xp = np.zeros( (self.mesh_X.n,) + OC.X0.shape )    
     self.all_P  = np.zeros( (self.mesh_X.n,) + OC.X0.shape )
     self.all_Pp = np.zeros( (self.mesh_X.n,) + OC.X0.shape )
 
