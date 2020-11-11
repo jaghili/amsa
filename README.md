@@ -1,5 +1,5 @@
 # A-MSA
-An implementation of the depth-to-deep adaptive algorithm in Python
+An implementation of the depth adaptive algorithm in Python
 
 # Requirements
 the code requires `mpi4py` (with MPI routines), `numpy` and `cmaes` (optional).
