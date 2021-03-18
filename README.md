@@ -5,7 +5,7 @@ An implementation of the depth adaptive algorithm in Python
 the code requires `mpi4py` (with MPI routines), `numpy` and `cmaes` (optional).
 
 # Usage
-The sinus test case is preconfigured for the sinus test case and can be launched using
+The sinus test case is preconfigured and can be launched using
 
 ```
 mpirun --host localhost:16 --np 16 python main.py
