@@ -55,9 +55,7 @@ class EMSA:
   # Linear P1 Interpolator
   def P1Interp(self, t, mesh, data):
     """
-    t is a time
-    mesh is the interpolation mesh 
-    data is a n x d x K matrix
+    Returns the value of the interpolated data at t
     """
     res = 0.0
     

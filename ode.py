@@ -112,113 +112,6 @@ def ODEsolve2(mesh, f, y0, solve_method='RK4', backward = False):
             
 
 
-def ODEsolve(mesh, f, y0, solve_method='RK45', backward = False):
-    """
-    Integrate ODE with arbitrary solver : euler, RK4, scipy's RK45 or DOP853
-    Returns a list of time intervals and solution on it
-    """
-    piecewise_y = list()
-    piecewise_yp = list()
-
-    initvalue = y0 
-
-
-    # Explicit Euler 
-    # ------------------------------------------------------ #x
-    if solve_method == 'euler':
-
-        # Backward
-        if backward:
-
-            tmax = mesh.points[-1]
-
-            piecewise_y.append([tmax, initvalue])
-            piecewise_yp.append([tmax, f(tmax, initvalue)])
-
-            for I in reversed(mesh.intervals):
-                h = np.abs(I[1]-I[0])
-                y_step = initvalue - h * f(I[1], initvalue)
-                piecewise_y.append([I[0], y_step])
-                piecewise_yp.append([I[0], f(I[0], y_step)])
-                initvalue = y_step
-
-        # Forward
-        else:
-
-            tmin = mesh.points[0]
-
-            piecewise_y.append([tmin, initvalue])
-            piecewise_yp.append([tmin, f(tmin, initvalue)])
-
-            # on rajoute les points extremités
-            for I in mesh.intervals:
-                h = np.abs(I[1] - I[0])
-                y_step = initvalue + h * f(I[0], initvalue)
-                piecewise_y.append([I[1], y_step])
-                piecewise_yp.append([I[1], f(I[1], y_step)])
-                initvalue = y_step
-
-
-    # Non adaptive RK4
-    # ------------------------------------------------------ #		      
-
-    if solve_method == 'RK4':
-
-        # RK 4 values
-        gamma = np.array([16/135, 0, 6656/12825, 28561/56430, -9/50, 2/55])
-        alpha = np.array([ 0, 1/4, 3/8, 12/13, 1, 1/2 ])
-        beta = np.array([[	      0,	  0,	      0,	 0,	 0, 0],
-                         [	    1/4,	  0,	      0,	 0,	 0, 0],
-                         [	   3/32,       9/32,	      0,	 0,	 0, 0],
-                         [1932/2197, -7200/2197,  7296/2197,	 0,	 0, 0],
-                         [	439/216,	 -8,   3680/513, -845/4104,	 0, 0],
-                         [	  -8/27,	  2, -3544/2565, 1859/4104, -11/40, 0]])
-        m = len(gamma)
-
-
-
-        # Backward
-        if backward:
-
-            tmax = mesh.points[-1]
-            piecewise_y.append([tmax, initvalue])
-            piecewise_yp.append([tmax, f(tmax, initvalue)])
-
-            for I in reversed(mesh.intervals):
-                h = np.abs(I[1]-I[0])
-
-                # Compute Ks
-                Ks = [f(I[1], initvalue)]
-                for j in range(1, m):
-                    Kj = f(I[1] - alpha[j]*h, initvalue - h*sum(b*K for b, K in zip(beta[j,:], Ks)))
-                    Ks.append(Kj)
-
-                y_step = initvalue - h * sum(g*K for g,K in zip(gamma, Ks))
-                piecewise_y.append([I[0], y_step])
-                piecewise_yp.append([I[0], f(I[0], y_step)])
-                initvalue = y_step
-
-        # Forward
-        else:
-
-            tmin = mesh.points[0]
-            piecewise_y.append([tmin, initvalue])
-            piecewise_yp.append([tmin, f(tmin, initvalue)])
-
-            for I in mesh.intervals:
-                h = np.abs(I[1]-I[0])
-
-                # Compute Ks
-                Ks = [f(I[0], initvalue)]
-                for j in range(1, m):
-                    Kj = f(I[0] + alpha[j]*h, initvalue + h*sum(b*K for b, K in zip(beta[j,:], Ks)))
-                    Ks.append(Kj)
-
-                y_step = initvalue + h * sum(g*K for g,K in zip(gamma, Ks))
-                piecewise_y.append([I[1], y_step])
-                piecewise_yp.append([I[1], f(I[1], y_step)])			
-                initvalue = y_step
-
     # Not tested yet
     # 
     # # Adaptive RK45
@@ -236,10 +129,10 @@ def ODEsolve(mesh, f, y0, solve_method='RK45', backward = False):
 
     #         for interval in reversed(mesh.intervals):
     #             soln = solve_ivp(f,		   \
-    #                              np.flip(interval),		   \
-    #                              initvalue, \
-    #                              # jac = self.ode.jac, \
-    #                              method = solve_method)
+        #                              np.flip(interval),		   \
+        #                              initvalue, \
+        #                              # jac = self.ode.jac, \
+        #                              method = solve_method)
 
     #             for i in range(1, len(soln.t)):
     #                 piecewise_y.append([soln.t[i], soln.y[:,i] ])
@@ -254,10 +147,10 @@ def ODEsolve(mesh, f, y0, solve_method='RK45', backward = False):
     #         piecewise_yp.append([tmin, f(tmin, initvalue)])	  
     #         for interval in mesh.intervals:
     #             soln = solve_ivp(f,	  \
-    #                              interval,		  \
-    #                              initvalue, \
-    #                              # jac = self.ode.jac, \
-    #                              method = solve_method)
+        #                              interval,		  \
+        #                              initvalue, \
+        #                              # jac = self.ode.jac, \
+        #                              method = solve_method)
 
     #             for i in range(1, len(soln.t)):		       
     #                 piecewise_y.append([soln.t[i], soln.y[:,i]])

@@ -8,9 +8,9 @@ from Mesh import *
 class OptimalControlProblem:
   def __init__(self):
 
-    self.d          = None
-    self.sizeu      = None
-    self.f          = None
+    self.d          = None   # dimension of the state vector
+    self.sizeu      = None   # dimension of the control vector
+    self.f          = None   # dynamic
     self.phi        = None
     self.L          = None
     self.u_bound    = None
@@ -22,7 +22,7 @@ class OptimalControlProblem:
 #
 # 1D Problem X'(t) = X(t) + u
 # u in (umin, umax)
-############################################################################################
+#############################################################################
     
 class OnedimProblem(OptimalControlProblem):
 
@@ -246,7 +246,7 @@ class NeuralNet(OptimalControlProblem):
     """
     Defines a neural network 
     """
-    super ().__init__ ()    
+    super ().__init__()    
     assert FinalTime > 0.
     self.T = FinalTime
     
@@ -262,7 +262,10 @@ class NeuralNet(OptimalControlProblem):
     self.u_bound = None
     self.sizeu   = d*d+d
       
-    def reshaper(u):      
+    def reshaper(u):
+      """
+      Convert a parameter vector to a matrix W and a vector b
+      """
       W = np.array(u)[:self.d*self.d].reshape(self.d, self.d)
       b = np.array(u)[self.d*self.d:].reshape(self.d, 1)
       return W, b
@@ -376,7 +379,6 @@ class NeuralNet(OptimalControlProblem):
     self.phi_expr = str('0.5 * (sum(X^j(T)) - XT^j)')
     self.phi      = lambda all_X, XT : ( self.g(all_X) - XT[0, :] )**2 
     self.sum_phi  = lambda all_X, XT : np.mean(self.phi(all_X, XT)) #/ self.K              # 1
-
     self.dxphi    = lambda all_X, XT : 2 * self.dxg(all_X) * ( self.g(all_X) - XT[0, :]) # d x K
     #self.dxphi      = lambda all_X, XT : 2 * self.dxg(all_X) * np.sum(self.g(all_X) - self.XT[0,:]) / self.K  # d x K
 
@@ -618,7 +620,6 @@ class NN_1d_exact(NeuralNet):
 
     
 # classification
-
 class NN_2d_classif(NeuralNet):
  
   def __init__(self, d, K, T, f, xbounds, ybounds):
@@ -720,9 +721,112 @@ class NN_2d_classif(NeuralNet):
     return x_in, x_out
 
 
+#
+# Convolutional network : X'(t) = tanh(W # x + b)
+#
+############################################################################################
+
+class ConvNet(OptimalControlProblem):
+
+  def __init__(self, d, K, T):
+    """
+    Defines a convolutional network
+    - We assume input images are made of dxd pixels 
+    - K is the number of samples
+    - T is the final time
+    """
+    
+    super().__init__()
+
+    from scipy import ndimage
+
+    assert np.mod(d, 2) == 0
+    assert FinalTime > 0.
+    
+    self.T = T             # some final time
+    self.d = d*d           # number of pixels of an dxd image
+    self.d_img = d         # side dimension d of an dxd image 
+    self.K = K             # number of samples
+    self.dk = 3            # filter size
+
+    self.u_bound = None
+    self.sizeu   = self.dk*self.dk + 4
+
+    # training data
+    self.X0 = None
+    self.XT = None
+
+    print('Init ConvNet:')
+    print('--------------------------------:')
+    print('T = {}'.format(self.d_img))
+    print('dim vector X = {}'.format(self.d))
+    print('no.sample K = {}'.format(K))
+    print('size kernel dk = {}'.format(self.dk))
 
 
+    def shaper(W,b):
+      """
+      Convert: W,b ----> u
+      """
+      n, m = W.shape
+      assert n == self.dk
+      assert m == self.dk
 
+      n, m = b.shape
+      assert n == self.d_img
+      assert m == self.d_img
+
+      u = np.zeros(self.sizeu)
+      u[:self.dk*self.dk] = W.reshape(self.dk*self.dk)
+      u[self.dk*self.dk:] = b.reshape(self.d_img*self.d_img)
+
+      return u
+
+    
+    def reshaper(u):
+      """
+      Convert:  u  ---->   W, b
+      """
+      _a = np.array(np.linspace(0, 1, self.d_img) < 0.5, dtype = 'float')
+      _b = np.array(np.linspace(0, 1, self.d_img) > 0.5, dtype = 'float')
+
+      up_left = np.outer(_a, _a)
+      up_right = np.outer(_a, _b)
+      down_left = np.outer(_b, _a)
+      down_right = np.outer(_b, _b)
+      
+      W = np.array(u)[:self.dk*self.dk].reshape(self.dk, self.dk)
+      b = np.array(u)[self.dk*self.dk]  *up_left     \
+        + np.array(u)[self.dk*self.dk+1]*up_right  \
+        + np.array(u)[self.dk*self.dk+2]*down_left \
+        + np.array(u)[self.dk*self.dk+3]*down_right
+      return W, b
+    
+    self.reshaper = reshaper
+
+    def f(t, X, u):
+      """
+      Dynamic x'(t) = f(t,x,u)
+
+      """
+      W, b = self.reshaper(u)
+      return np.tanh(ndimage.convolve(X.reshape(self.d_img, self.d_img), W) + b)
+
+    self.f = f
+
+    # TODO: dxf
+    
+    # Lagrangian
+    self.L = lambda X, u, u0 : self.eta * 0.5 * np.inner(u - u0,u - u0)
+    
+    # TODO: dxL
+    self.g   = lambda all_X : np.sum(all_X, axis=0) / self.d
+    
+    # Cost
+    self.phi_expr = str('0.5 * (sum(X^j(T)) - XT^j)')
+    self.phi = lambda all_X, XT : (self.g(all_X) - XT[0,:])**2
+    self.sum_pi = lambda all_X, XT : np.mean(self.phi(all_X, XT))
+    self.dxphi = lambda all_X, XT : 2 * self.dxg(all_X) * ( self.g(all_X) - XT[0, :])
 
 
 
