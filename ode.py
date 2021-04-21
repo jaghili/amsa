@@ -1,30 +1,34 @@
 """
 Copyright (c) 2019 Olga Mula, JA
 """
-
+import torch as tc
 import numpy as np
 
-def ODEsolve2(mesh, f, y0, solve_method='RK4', backward = False):
+def ODEsolve2(mesh, f, y0, solve_method='euler', backward = False):
     """
     Integrates y' =f(y) with y(0) = y0
     where y0 is an aribtrary array and spits out all_x and all_xp of size [N, d, K] where N is the time steps
+
+    f : 
+    - takes time t and matrix of size all_X [d, K]
+    - returns matrix of size [N, d, K]
     
     """
-    d, K = y0.shape # assume y0 is d x K with K>=1
+    K, d = y0.shape # assume y0 is d x K with K>=1
     N = mesh.n
-    all_x  = np.zeros(( N, d, K ))
-    all_xp = np.zeros(( N, d, K ))
+    all_x  = tc.zeros(N, K, d)
+    all_xp = tc.zeros(N, K, d)
 
     tmin, tmax = mesh.points[0], mesh.points[-1]    
 
     # Initial conditions
     initvalue = y0
     if backward:
-        all_x[N-1, :, :]   = y0     # fix at N-1
-        all_xp[N-1, : , :] = f(tmax, y0)  # fix at N-1
+        all_x[N-1, :, :]   = y0
+        all_xp[N-1, : , :] = f(tmax, y0)  
     else:        
-        all_x[0, :, :]   = y0     # fix at N-1
-        all_xp[0, : , :] = f(tmin, y0)  # fix at N-1
+        all_x[0, :, :]   = y0             
+        all_xp[0, : , :] = f(tmin, y0)
     
     
     # Explicit Euler 
@@ -47,7 +51,7 @@ def ODEsolve2(mesh, f, y0, solve_method='RK4', backward = False):
             
             for i in range(1,N):
                 t        = mesh.points[i]    # ti
-                t_left  = mesh.points[i-1]  # ti-1
+                t_left   = mesh.points[i-1]  # ti-1
                 h = np.abs(t - t_left)
                 all_x[i, :, :] = all_x[i-1, :, :] + h * f(t_left, all_x[i-1, :, :])
                 all_xp[i, :, :] = f(t, all_x[i, :, : ])
@@ -109,53 +113,3 @@ def ODEsolve2(mesh, f, y0, solve_method='RK4', backward = False):
                 initvalue = y_step
                 
     return all_x, all_xp
-            
-
-
-    # Not tested yet
-    # 
-    # # Adaptive RK45
-    # # ------------------------------------------------------ #		      
-
-    # if solve_method == 'RK45' or solve_method == 'DOP853':
-        
-    #     from scipy.integrate import ode, solve_ivp
-        
-    #     # Backward
-    #     if backward:
-    #         tmax = mesh.points[-1]
-    #         piecewise_y.append([tmax, initvalue])
-    #         piecewise_yp.append([tmax, f(tmax, initvalue)])
-
-    #         for interval in reversed(mesh.intervals):
-    #             soln = solve_ivp(f,		   \
-        #                              np.flip(interval),		   \
-        #                              initvalue, \
-        #                              # jac = self.ode.jac, \
-        #                              method = solve_method)
-
-    #             for i in range(1, len(soln.t)):
-    #                 piecewise_y.append([soln.t[i], soln.y[:,i] ])
-    #                 piecewise_yp.append([soln.t[i], f(soln.t[i], soln.y[:,i])])
-
-    #             initvalue = soln.y[:,-1]
-
-    #     # Forward
-    #     else:
-    #         tmin = mesh.points[0]
-    #         piecewise_y.append([tmin, initvalue])	    
-    #         piecewise_yp.append([tmin, f(tmin, initvalue)])	  
-    #         for interval in mesh.intervals:
-    #             soln = solve_ivp(f,	  \
-        #                              interval,		  \
-        #                              initvalue, \
-        #                              # jac = self.ode.jac, \
-        #                              method = solve_method)
-
-    #             for i in range(1, len(soln.t)):		       
-    #                 piecewise_y.append([soln.t[i], soln.y[:,i]])
-    #                 piecewise_yp.append([soln.t[i], f(soln.t[i], soln.y[:,i])])
-
-    #             initvalue = soln.y[:,-1]
-
-    # return piecewise_y, piecewise_yp # list 
