@@ -27,27 +27,27 @@ parser.add_argument('-maxlayers',  help='adaptivity: maximum number of layers al
 parser.add_argument('-minlayers',  help='adaptivity: min number of layers')
 parser.add_argument('-addlayers',  help='adaptivity: Number of layers to add at each refinement')
 parser.add_argument('-adaptrho',   help='adaptivity: Adapt rho automatically')
-parser.add_argument('-problem',    help='select problem: simplest | oscillator | knownu | sinus | step | classif ')
+parser.add_argument('-problem',    help='select problem: simplest | oscillator | knownu | sinus | step | classif | pollution')
 args = parser.parse_args()
 
 
 # Casting arguments and default values
 
 T            = float(args.tf) if args.tf is not None                   else 5.0                   # Final time 
-time_steps   = int(args.n) if args.n          is not None              else 4                     # Initial number of time steps
+time_steps   = int(args.n) if args.n          is not None              else 16                     # Initial number of time steps
 kmax         = int(args.kmax) if args.kmax is not None                 else 300                   # Max number of training iterations
 res_dir      = str(args.o) if args.o is not None                       else './results/default/'  # Output directory
-rho          = float(args.rho) if args.rho is not None                 else 2.0                   # E-MSA penalization parameter 
+rho          = float(args.rho) if args.rho is not None                 else 1.0                   # E-MSA penalization parameter 
 maxiter      = int(args.maxiter) if args.maxiter is not None           else 10                    # Maximum number of BFGS iterations
 odesolver    = str(args.odesolver) if args.odesolver is not None       else 'euler'               # ODE solver
 
 # adapt settings
 adapt_max_layers = int(args.maxlayers) if args.maxlayers is not None   else 128
-adapt_add_layers = int(args.addlayers) if args.addlayers is not None   else 16
+adapt_add_layers = int(args.addlayers) if args.addlayers is not None   else 8
 
 # strategy
 adapt_auto   = int(args.adaptauto) if args.adaptauto is not None       else 0                     # enable/disable automatic adaptation
-adapt_each   = int(args.adapteach) if args.adapteach is not None       else 10                    # add no_add layers each # iterations
+adapt_each   = int(args.adapteach) if args.adapteach is not None       else 0                     # add no_add layers each # iterations
 adapt_dyadic = int(args.adaptdyadic) if args.adaptdyadic is not None   else 0                     # adapt dyadically # steps
 adapt_rho    = int(args.adaptrho) if args.adaptrho is not None         else 0                     # adapt rho
 
@@ -135,6 +135,15 @@ elif prb == 'sinus':
 elif prb == 'step':
   prob = NN_func1d(d, K, T, lambda x : 0.5 if x < 0 else -0.5, [-1.0, 1.0], 0.2)
 
+elif prb == 'pollution':
+  prob = NN_general_data('./pollution_data/Xin.npy',\
+                         './pollution_data/Xout.npy',\
+                         # './pollution_data/Xin_test.npy',\    # Test set
+                         # './pollution_data/Xout_test.npy',\
+                         './pollution_data/observation/Xin_allstations.npy',\
+                         './pollution_data/observation/Xout_allstations.npy',\
+                         T)
+  
 elif prb == 'classif':
   prob = NN_2d_classif(d, K, T, lambda x,y : 1.0 if x**2+y**2 < 0.25 else 0.0, [-1.0, 1.0], [-1.0, 1.0])  
 

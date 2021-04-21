@@ -257,8 +257,7 @@ class NeuralNet(OptimalControlProblem):
     self.X0      = None 
     self.XT      = None
 
-    # test data
-    
+    # test data    
     self.u_bound = None
     self.sizeu   = d*d+d
       
@@ -601,7 +600,6 @@ class NN_1d_exact(NeuralNet):
     x_out = np.zeros(no_test_points)
     
     x0 = np.ones((self.d, no_test_points)) * x_in
-    # f  = lambda t, X: self.f(t, X, algo.P1Interp(t, algo.mesh_U, algo.u))
     f  = lambda t, X: self.f(t, X, algo.P1Interp(t, algo.mesh_U, algo.lowest_u))
     all_X, all_Xp = ODEsolve2(algo.mesh_X, f, x0, algo.solve_method) # returns n x d x K objects
     x_out = self.g(all_X[-1, :, :])
@@ -653,8 +651,6 @@ class NN_2d_classif(NeuralNet):
     
     self.XT = np.array([ f(x,y) for x,y in zip(Xr,Yr) ]) * np.ones((self.d, K))    
     self.Xi = self.XT 
-
-
 
     Xr = self.xmin + (self.xmax-self.xmin) * np.random.rand(2*K)
     Yr = self.ymin + (self.ymax-self.ymin) * np.random.rand(2*K)
@@ -808,6 +804,7 @@ class ConvNet(OptimalControlProblem):
       """
       Dynamic x'(t) = f(t,x,u)
 
+<<<<<<< HEAD
       """
       W, b = self.reshaper(u)
       return np.tanh(ndimage.convolve(X.reshape(self.d_img, self.d_img), W) + b)
@@ -827,119 +824,97 @@ class ConvNet(OptimalControlProblem):
     self.phi = lambda all_X, XT : (self.g(all_X) - XT[0,:])**2
     self.sum_pi = lambda all_X, XT : np.mean(self.phi(all_X, XT))
     self.dxphi = lambda all_X, XT : 2 * self.dxg(all_X) * ( self.g(all_X) - XT[0, :])
+=======
+# General data 
+
+class NN_general_data(NeuralNet):
+
+  def __init__(self, fn_Xin, fn_Xout, fn_Xin_test, fn_Xout_test, T):
+>>>>>>> f7184602893e8717df196bf1868088747c9d2c18
+
+    #
 
 
+    # Load training files
+    print('DEBUG: loading data...')
+    Xin = np.load(fn_Xin)
+    Xout = np.load(fn_Xout)
 
+    Xin_test = np.load(fn_Xin_test)
+    Xout_test = np.load(fn_Xout_test)
 
-
-
-
-
-
-# Trash
-
-    
-### Unused / untested / debug tools 
-   
-    # Takagi function
-    # from functools import reduce
-    # from itertools import repeat
-    # self.xmin, self.xmax = 0, 1.0
-    
-    # x_hat  = self.xmin + (self.xmax - self.xmin) * np.random.rand(K)
-    
-    # renormalize = 2*( np.tanh(1.0) - np.tanh(-1.0) - np.tanh(2.0) )
-    # tanh_base = lambda x : 2*(np.tanh(2*x)-np.tanh(2*x-2)-np.tanh(2.)) / renormalize
-    # tk = lambda k : np.array([ reduce(lambda x, f: f(x), repeat(tanh_base, k), x) for x in x_hat ])
-
-    # a = 0.2
-    # def exact_function(M):
-    #   T = np.zeros(K)
-    #   for k in np.arange(1, M+1):
-    #     T += a**k * tk(k)
-    #   return T
-    
-    # K_t = 20
-    # y_hat = exact_function(K_t) + 0.01*np.random.rand(K) - 0.01
-    # target_function = exact_function
-    # self.Xi = np.zeros((d,K))
-    # self.Xi = target_function(x_hat) * np.ones((d,K))
-
-    
-    # # others
-    # self.xmin, self.xmax = -1.0, 1.0
-    # x_hat  = self.xmin + (self.xmax - self.xmin) * np.random.rand(K)
-
-    # # sinus
-    # # exact_function  = np.vectorize(lambda t : np.sin(np.pi*t)) #+ (-0.5 + 1.0*np.random.rand()))
-    # # target_function = np.vectorize(lambda t : np.sin(np.pi*t))
-
-    # # marches
-    # target_function = np.vectorize(lambda x : 0.5 if x < ( self.xmin + self.xmax)/2.0 else -0.5)
-    # exact_function = np.vectorize(lambda x : 1.0 * np.random.rand() if x < (self.xmin + self.xmax)/2.0  else -1.0 * np.random.rand()) # volume
-    # #exact_function = target_function # idéal
-    
-    # #exact_function = np.vectorize(lambda x : 0.5*(x+1) + 0.5*np.random.rand() if x < 0. else 1 - x + 0.5*np.random.rand()) # affine
+    assert Xin.ndim == 2
+    assert Xout.ndim == 2
+    assert Xin_test.ndim == 2
+    assert Xout_test.ndim == 2    
         
-    # y_hat  = exact_function(x_hat)
-    # self.Xi = target_function(x_hat) * np.ones((d,K))
+    # dimensions of the input/output data spaces    
+    self.d, self.K = np.shape(Xin)
+    self.N = self.d
+    self.M = np.shape(Xout)[0]
+
+    super().__init__(self.d, self.K, T)
     
+    self.g   = lambda all_X : np.sum(all_X, axis = 0) / self.d
+    self.dxg = lambda all_X : np.ones(all_X.shape) / self.d
 
-    # # builds data 
-    # self.d, self.K = d, K
-    # self.sizeu = (self.d+1)*self.d  
-    # self.u_bound =  [(-2.0, 2.0) for k in range(self.sizeu)]  # min-max values
-    # #self.u_bound =  [(None, None) for k in range(self.sizeu)]  # min-max values     
+    self.X0 = Xin
+    self.XT = Xout
+    self.Xi = self.XT
 
-    
-    # self.X0 = x_hat * np.ones((d,K))
-    # self.XT = y_hat * np.ones((d,K))    
-    
-    # # g = sum(X) (Xj is a multiple of ones(d))
-    # self.phi_expr = str('1/K * sum_j (0.5 * (sum(X^j(T)) - XT^j)**2)')
-    # self.phi = lambda X, Xj: np.sum(0.5 * ( np.sum(X, axis=0)/self.d - Xj[0,:])**2 ) / self.K
-    # self.dxphi = lambda X, Xj : np.ones((self.d, 1))/self.d * ( np.sum(X, axis=0)/self.d - Xj[0,:] ) / self.K
+    self.xmin, self.xmax = 0.0, 1.0
+    self.ymin, self.ymax = 0.0, 1.0    
 
-    
-    # assert isinstance(self.X0, np.ndarray) and isinstance(self.XT, np.ndarray)
-    # assert self.X0.ndim == 2 and self.XT.ndim == 2
+    self.X0_test = Xin_test
+    self.XT_test = Xout_test
+    self.Xi_test = self.XT_test
 
-# check derivative dudxf
-# eps = 1e-10
-# X = np.random.rand(d,K) #+ np.ones((d,K))
-# u = np.ones(prob.sizeu)
-# dudxf = prob.dudxf(T, X, u)  
-# for i in range(prob.sizeu):
-#   u1 = np.zeros(prob.sizeu)
-#   u1[i] = 1.0
-#   adudxf = (prob.dxf(T, X, u + eps * u1) - prob.dxf(T, X, u))/eps
-#   print('i = {:d}'.format(i))
-#   print((np.max(np.abs(adudxf - dudxf[:, i, :, :]))))
+    self.u_true = None
+    self.u_bound = [(-1.0, 1.0) for k in range(self.sizeu)]
 
 
+  def plot_prediction(self, algo, ax = None, cax = None, fig = None):
+    """
+    input : algo, ax, number of test points 
+    output : test inputs for plottings x_in and x_out 
+    """
+
+    no_stations = 15
 
 
+    # Test pred 
+    x0 = self.X0_test
+    f  = lambda t, X: self.f(t, X, algo.P1Interp(t, algo.mesh_U, algo.lowest_u))
+    all_X, all_Xp = ODEsolve2(algo.mesh_X, f, x0, algo.solve_method) # returns n x d x K objects
 
-    # #
-    # # Tensorflow version
-    # #
-    # def tf_f(t, X, u):
-    #   """
-    #   /!\ X has shape (d, K) !
-    #   """
-    #   W = tf.reshape(u[:self.d*self.d], [self.d, self.d])
-    #   b = tf.reshape(u[self.d*self.d:], [self.d, 1]) 
-    #   return tf.tanh( W @ X + b) #     
-    
-    # def tf_dxf(t, X, u):
+    test_x_in  = self.X0_test
+    test_x_out = self.g(all_X[-1, :, :])    
+
+    # plot test curve
+    if ax is not None:
+      ax.cla()
+      ax.set_title('Data set and best test plot')
+      #for i in range(no_stations):
+      i=0
+
+      # test 
+      ax.plot(test_x_in[2,i::no_stations], self.XT_test[0,i::no_stations], '-x', label='test data s={}'.format(i))  # prediction
+      ax.plot(test_x_in[2,i::no_stations], test_x_out[i::no_stations], '--x', label='test pred s={}'.format(i))          # data
       
-    #   W = tf.reshape(u[:self.d*self.d], [self.d, self.d])
-    #   b = tf.reshape(u[self.d*self.d:], [self.d, 1])
-      
-    #   tanhp = tf.reshape(tf.transpose(1.0 - tf.tanh( W @ X + b )**2), [self.K, 1, self.d] )
-    #   return tf.transpose((tf.transpose(W) * tanhp), [0, 2, 1])
+      # trial
+      x0 = self.X0
+      f  = lambda t, X: self.f(t, X, algo.P1Interp(t, algo.mesh_U, algo.lowest_u))
+      all_X, all_Xp = ODEsolve2(algo.mesh_X, f, x0, algo.solve_method) # returns n x d x K objects
 
-    # self.tf_f = tf_f
-    # self.tf_dxf = tf_dxf
-    # self.tf_L = lambda X, u, u0 : 0.5 * tf.norm(u - u0)**2
-    # self.tf_dxL = lambda X, u, u0 : 0. # tf.zeros(( self.K, 1, self.d ))
+      trial_x_in  = self.X0
+      trial_x_out = self.g(all_X[-1, :, :])
+      
+      ax.plot(trial_x_in[2,::10], self.XT[0,::10],    '-x', label='trial data') # data
+      ax.plot(trial_x_in[2,::10], trial_x_out[::10], '--x', label='trial pred') # 
+      
+      ax.legend()
+
+    return test_x_in, test_x_out    
+
+
+  
