@@ -804,7 +804,6 @@ class ConvNet(OptimalControlProblem):
       """
       Dynamic x'(t) = f(t,x,u)
 
-<<<<<<< HEAD
       """
       W, b = self.reshaper(u)
       return np.tanh(ndimage.convolve(X.reshape(self.d_img, self.d_img), W) + b)
@@ -824,16 +823,11 @@ class ConvNet(OptimalControlProblem):
     self.phi = lambda all_X, XT : (self.g(all_X) - XT[0,:])**2
     self.sum_pi = lambda all_X, XT : np.mean(self.phi(all_X, XT))
     self.dxphi = lambda all_X, XT : 2 * self.dxg(all_X) * ( self.g(all_X) - XT[0, :])
-=======
-# General data 
+
 
 class NN_general_data(NeuralNet):
 
   def __init__(self, fn_Xin, fn_Xout, fn_Xin_test, fn_Xout_test, T):
->>>>>>> f7184602893e8717df196bf1868088747c9d2c18
-
-    #
-
 
     # Load training files
     print('DEBUG: loading data...')
