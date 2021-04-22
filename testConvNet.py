@@ -2,37 +2,48 @@ import OptimalControlProblems.ConvNet as cnet
 import torch
 import numpy as np
 
+print('test scikit learn dataset')
+from sklearn import datasets
+import Mesh
+import ode
 
-d = 8
-K = 7000
+# Import Digits
+digits = datasets.load_digits()
+K, dimx, dimy = digits.images.shape
+d = dimx
 T = 1
 
 A = cnet.ConvNet(d, K, T)
-
-
 u1 = torch.randn(A.sizeu)
-W, b = A.reshaper(u1)
-u2 = A.shaper(W,b)
-
-print('test (re)shaper')
-print('u1, W, b, u2 = shaper(W,b)')
-print(u1)
-print(W)
-print(b)
-print(u2)
+mesh = Mesh.Mesh(0, 1.0)
 
 
-print('test f')
-t = 0.1
-X0 = torch.randn(K, A.d)
-X1 = A.f(t, X0, u1)
+# Hamiltonian
+def H(t, bX, bP, u):
+  """
+  input :
+  - t time
+  - bX : batch of X, size [K, d]
+  - bP : batch of P, size [K, d]
+  - u  : control u of size [sizeu]
+  output:
+  - scalar H = P * f(t,X,u) - L(u)
+  """  
+  return torch.sum(bP * A.f(t, bX, u), axis=1)
 
 
-print('test ODE')
-import ode
-import torch
-import Mesh
+# inputs/outputs
+Xi = torch.from_numpy(np.array(digits.images.reshape(K, dimx*dimy), dtype=np.float32))
+Xo = torch.from_numpy(np.array(digits.target, dtype=np.float32))
+                      
+# forward
+f = lambda t, X : A.f(t, X, u1)
+X0 = Xi
+all_X, all_Xp = ode.ODEsolve2(mesh, f, X0)
 
-mesh = Mesh.Mesh(0,1)
-f = lambda t, X : A.f(t,X,u1)
-XT = ode.ODEsolve2(mesh, f, X0)
+# backward
+XT = all_X[-1,:,:]
+PT = - A.dxphi(XT, Xo)
+
+
+# maximize Hamiltonian

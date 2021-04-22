@@ -48,7 +48,6 @@ class ConvNet(OptimalControlProblem):
                                             
 
 
-
     def shaper(W, b): # Assume that W and b are torch tensors
       """
       Convert: W,b ----> u
@@ -75,14 +74,20 @@ class ConvNet(OptimalControlProblem):
       - u is a torch vector
       - W,b are torch tensors 
       """
-      _a = tc.tensor(tc.linspace(0, 1, self.d_img) < 0.5)
-      _b = tc.tensor(tc.linspace(0, 1, self.d_img) > 0.5)
+
+      _a = np.array(np.linspace(0, 1, self.d_img) < 0.5, dtype=np.float32)
+      _b = np.array(np.linspace(0, 1, self.d_img) > 0.5, dtype=np.float32)
+
+      up_left = tc.from_numpy(np.outer(_a,_a))
+      up_right = tc.from_numpy(np.outer(_a,_b))
+      down_left = tc.from_numpy(np.outer(_b,_a))
+      down_right = tc.from_numpy(np.outer(_b,_b))      
       
       W = u[:self.dk*self.dk].reshape(self.dk, self.dk)
-      b = u[self.dk*self.dk]  *tc.outer(_a, _a)   \
-        + u[self.dk*self.dk+1]*tc.outer(_a, _b)   \
-        + u[self.dk*self.dk+2]*tc.outer(_b, _a)   \
-        + u[self.dk*self.dk+3]*tc.outer(_b, _b)
+      b = u[self.dk*self.dk]  *up_left   \
+        + u[self.dk*self.dk+1]*up_right  \
+        + u[self.dk*self.dk+2]*down_left \
+        + u[self.dk*self.dk+3]*down_right
       return W, b
     
     self.reshaper = reshaper
@@ -94,27 +99,28 @@ class ConvNet(OptimalControlProblem):
       - returns a vector of size [K, d]
 
       """
-      W, b = self.reshaper(u) 
+      W, b = self.reshaper(u)
+      K, d = X.shape
+      dimg = np.int(np.sqrt(d))
       
-      _X = X.reshape(self.K, 1, self.d_img, self.d_img)
-      _W = W.reshape(1,      1, self.dk,    self.dk)
-      _b = b.reshape(1,      1, self.d_img, self.d_img)
+      _X = X.reshape(K, 1, dimg, dimg)
+      _W = W.reshape(1, 1, self.dk,    self.dk)
+      _b = b.reshape(1, 1, dimg, dimg)
 
       # conv2d([batch, no channels (input params), size x, size y],  [1, 1, dk, dk] )
       res = tc.nn.functional.conv2d(_X, _W, padding=1)
       
-      return tc.tanh(res + _b).reshape(self.K, self.d)
+      return tc.tanh(res + _b).reshape(K, d)
 
     self.f = f
-
-    # TODO: dxf
     
     # Lagrangian
     self.L = lambda X, u, u0 : self.eta * 0.5 * tc.inner(u - u0,u - u0)
-    self.g   = lambda all_X : tc.sum(all_X, axis=0) / self.d
+    self.g   = lambda batch_X : tc.sum(batch_X, axis=1) / self.d  # batch_X is K x d, g(X) is K,
+    self.dxg = lambda batch_X : tc.ones(batch_X.shape)  / self.d  # dxg is K x d full of 1/d
     
     # Cost
     self.phi_expr = str('0.5 * (sum(X^j(T)) - XT^j)')
-    self.phi = lambda all_X, XT : (self.g(all_X) - XT[0,:])**2
-    self.sum_pi = lambda all_X, XT : tc.mean(self.phi(all_X, XT))
-    self.dxphi = lambda all_X, XT : 2 * self.dxg(all_X) * ( self.g(all_X) - XT[0, :])
+    self.phi = lambda batch_X, XT : (self.g(batch_X) - XT)**2         # size K
+    self.sum_phi = lambda batch_X, XT : tc.mean(self.phi(batch_X, XT))
+    self.dxphi = lambda batch_X, XT : 2 * self.dxg(batch_X) * (self.g(batch_X) - XT).unsqueeze(0).T
