@@ -27,10 +27,11 @@ class Dualize:
     # Hamiltonian function 
     H = lambda t, X, P, u : tc.sum(P * self.oc.f(t, X, u)) - self.oc.L( X, u)
 
-    list_X = [None for j in range(mesh.n)]
-    list_P = [None for j in range(mesh.n)]
-    list_Xp = [None for j in range(mesh.n)]
-    list_Pp = [None for j in range(mesh.n)]      
+    list_X  = [None] * mesh.n  
+    list_P  = [None] * mesh.n  
+    list_Xp = [None] * mesh.n 
+    list_Pp = [None] * mesh.n 
+    list_H  = [None] * mesh.n
 
     all_J = list()
     
@@ -44,6 +45,7 @@ class Dualize:
 
       # Forward      
       print('[dual/solve] Forward')
+      print(f'\t j = 0 extremité gauche' )
       list_X[0] = self.oc.xhat.clone().detach().requires_grad_(True)
       list_Xp[0] = self.oc.f(0.0, list_X[0], all_u[0, :, 0])
       
@@ -51,6 +53,7 @@ class Dualize:
       list_Xp[0].requires_grad_(True)
       
       for j in range(1, mesh.n):
+        print(f'\t j = {j}')
         tl = mesh.h * (j-1)
         t = mesh.h * j
         
@@ -62,15 +65,18 @@ class Dualize:
         
       # Backward
       print('[dual/solve] Backward')
+      print(f'\t j = {mesh.n-1} extremité droite')
       list_P[-1] = - self.oc.dxphi(list_X[-1]).clone().detach()
-      Hamiltonian = H(mesh.points[-1], list_X[-1], list_P[-1], all_u[-1, :, 0])
-      Hamiltonian.backward(retain_graph=True)
+      list_H[-1] = H(mesh.points[-1], list_X[-1], list_P[-1], all_u[-1, :, 0])
+      list_H[-1].backward(retain_graph=True)      
       list_Pp[-1] = - list_X[-1].grad
       
+      
       for j in reversed(range(0, mesh.n-1)):
+        print(f'\t j = {j}')
         tr = mesh.h * (j+1)
-        Hamiltonian = H(tr, list_X[j+1], list_P[j+1], all_u[j+1, :, 0])
-        Hamiltonian.backward(retain_graph=True)
+        list_H[j+1] = H(tr, list_X[j+1], list_P[j+1], all_u[j+1, :, 0])
+        list_H[j+1].backward(retain_graph=True) 
         
         list_P[j]  = list_P[j+1] + mesh.h * list_X[j+1].grad
         list_Pp[j] = - list_X[j].grad   # dH/dX_j
