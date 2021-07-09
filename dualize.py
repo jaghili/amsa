@@ -12,72 +12,103 @@ class Dualize:
     """
     self.oc = ocp
 
-  def solve(self, mesh, eta = 1.0, maxiter=10, rho=1.0, learning_rate=0.75, u0 = None):
+  def solve(self, mesh, maxiter=10, rho=1.0, learning_rate=0.01, u0 = None):
     """
     Solve : maximization of the Hamiltonian
     """
     plt.ion()
-    fig, axs = plt.subplots(1,2)
+    fig, axs = plt.subplots(1, 3)
+    axs[0].cla()
+    axs[1].cla()
+    axs[2].cla()
     
     all_u = u0.clone().detach()
 
-    
     # Hamiltonian function 
-    _H = lambda t, X, P, u : tc.sum(P * self.oc.f(t, X, u)) - eta * self.oc.L(X,u) 
+    H = lambda t, X, P, u : tc.sum(P * self.oc.f(t, X, u)) - self.oc.L( X, u)
 
-    # EMSA algorithm
+    list_X = [None for j in range(mesh.n)]
+    list_P = [None for j in range(mesh.n)]
+    list_Xp = [None for j in range(mesh.n)]
+    list_Pp = [None for j in range(mesh.n)]      
+
+    all_J = list()
     
+    # EMSA algorithm    
     for i in range(maxiter):
       print(f'\n================ i={i+1} ================')
-      axs[0].cla()
+      #axs[0].cla()      
       
-      print('[dual/solve] Init')            
-      all_X = [None for i in range(mesh.n)]
-      all_P = [None for i in range(mesh.n)]
+      print('[dual/solve] Init')
+      print(all_u.squeeze())
 
       # Forward      
       print('[dual/solve] Forward')
-      all_X[0] = self.oc.xhat.clone().detach().requires_grad_(True)
-      all_X[0].requires_grad_(True)      
+      list_X[0] = self.oc.xhat.clone().detach().requires_grad_(True)
+      list_Xp[0] = self.oc.f(0.0, list_X[0], all_u[0, :, 0])
+      
+      list_X[0].retain_grad()
+      list_Xp[0].requires_grad_(True)
+      
       for j in range(1, mesh.n):
+        tl = mesh.h * (j-1)
         t = mesh.h * j
-        all_X[j] = all_X[j-1] + mesh.h * self.oc.f(t, all_X[j-1], all_u[j-1,:,0])
-        all_X[j].retain_grad()
-        #print(f'\tj={j}\t t={t}')
+        
+        list_X[j] = list_X[j-1] + mesh.h * self.oc.f(tl, list_X[j-1], all_u[j-1,:,0])
+        list_Xp[j] = self.oc.f(t, list_X[j], all_u[j, :, 0])
+        
+        list_X[j].retain_grad()
 
         
       # Backward
       print('[dual/solve] Backward')
-      all_P[-1] = - self.oc.dxphi(all_X[-1]).clone().detach()
+      list_P[-1] = - self.oc.dxphi(list_X[-1]).clone().detach()
+      Hamiltonian = H(mesh.points[-1], list_X[-1], list_P[-1], all_u[-1, :, 0])
+      Hamiltonian.backward(retain_graph=True)
+      list_Pp[-1] = - list_X[-1].grad
+      
       for j in reversed(range(0, mesh.n-1)):
-        t = mesh.h * j
-        H = _H(t, all_X[j+1], all_P[j+1], all_u[j+1, :, 0])
-        H.backward(retain_graph=True)
-        all_P[j] = all_P[j+1] + mesh.h * all_X[j+1].grad
+        tr = mesh.h * (j+1)
+        Hamiltonian = H(tr, list_X[j+1], list_P[j+1], all_u[j+1, :, 0])
+        Hamiltonian.backward(retain_graph=True)
+        
+        list_P[j]  = list_P[j+1] + mesh.h * list_X[j+1].grad
+        list_Pp[j] = - list_X[j].grad   # dH/dX_j
         #print(f'\tj={j}\t t={t}')
 
-      # Maximize
+      # Maximization
       print('[dual/solve] Maximize H')
       for it,t in enumerate(mesh.points):
         print(f'... on t={t}')        
         u = tc.randn(self.oc.sizeu, requires_grad=True)
         optimizer = tc.optim.Adam([u], lr=learning_rate)
 
-        for j in range(30):
-          loss = - _H(t, all_X[it], all_P[it], u)
-          loss.backward(retain_graph=True)
+        for j in range(10):
+          _H = H(t, list_X[it], list_P[it], u)
+          _H.backward(retain_graph=True)
+          
+          minus_Hamiltonian = - _H                                               \
+            + 0.5 * rho * tc.norm(list_Xp[it] - self.oc.f(t, list_X[it], u))**2  \
+            + 0.5 * rho * tc.norm(list_Pp[it] + list_X[it].grad)**2
+          minus_Hamiltonian.backward(retain_graph=True)
           optimizer.step()
-          #print(f'it={it}\t j={j} \tH={-loss.squeeze()}')
+          # print(f'it={it}\t j={j} \taH={-minus_Hamiltonian.squeeze()}')
 
         all_u[it, :, 0] = u
         
-        with tc.no_grad(): # all commands will skip grad computations
+        with tc.no_grad(): # skip grad computations
           all_u.clamp_(self.oc.u_bound[0][0], self.oc.u_bound[0][1])
-        
-        
-      #self.draw_plot(mesh, all_X, all_u, axs)
-      axs[0].plot(mesh.points, all_u.detach().numpy().squeeze(), '-', label='control')
+
+      all_X = tc.stack(list_X)
+      
+      loss = self.oc.phi(all_X[-1, :, :]) + mesh.h*tc.sum(self.oc.L(all_X, all_u))
+      all_J.append(loss.squeeze())
+      
+      print(f'J = {loss}')
+      
+      self.oc.draw_plot(mesh, all_X, all_u, all_J, axs)
+      # print(all_u.squeeze())
       plt.draw()
       plt.pause(0.0001)
 
-    return all_u
+    return all_u, all_X

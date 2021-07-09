@@ -6,18 +6,10 @@ class Mesh(): # args: time bound
     def __init__(self, t0, T, n_points=10):
         self.t0, self.T = t0, T
         self.n = n_points
-
+        self.h = (self.T - self.t0)/(self.n - 1)
+        
         # uniform
         self.points = np.linspace(t0, T, self.n)
-        
-        # refined around end-point
-        refined = np.sort(np.random.rand(self.n)**(1/3))
-        refined -= np.min(refined)
-        refined /= np.max(refined) # in [0,T]
-        refined *= T
-        #self.points = refined
-
-
         
         self.intervals = list()
         self.buildIntervals()        

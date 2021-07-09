@@ -1,94 +1,77 @@
-from oc import *
+import math
 
+import numpy as np
+import torch as tc
 
-#
-# 1D Problem X'(t) = X(t) + u
-# u in (umin, umax)
-#############################################################################
+from ocp import OptimalControlProblem
+
+class BangBang(OptimalControlProblem):
+  """
+  One dimentional optimal control problem:
+  x_u(t) is scalar
+  L(u)   is scalar
+  u(t)   is scalar
+
+  tau = Tf - math.log(5/2)
+
+  Taken from http://www.sfu.ca/~wainwrig/Econ331/Chapter20-bangbang-example.pdf
+
+  x' = x + u
+  x(0) = 4
+  u in (0,2))
+  """
+  def __init__(self, Tf=2.0, eta=1.0):
+    """Initializes a one-dimentional OC problem"""
+
+    # Init OptimalControlProblem attributes
+    super().__init__() 
+
+    self.d          = 1
+    self.K          = 1
+    self.Tf         = Tf
+    self.tau        = Tf - math.log(5/2)
+    print(f'BangBang : tau = {self.tau}')
     
-class OnedimProblem(OptimalControlProblem):
+    # Control
+    self.sizeu      = 1
+    umin            = 0.0
+    umax            = 2.0
+    self.u_bound = [(umin, umax)]
 
-  def __init__(self, FinalTime):
+    # Constraint
+    self.f          = lambda t, X, u : X + u
     
-    super().__init__()
-    
-    assert FinalTime > 0.
+    # Cost
+    self.xhat       = 4*tc.ones(self.d, self.K)
+    self.yhat       = -tc.ones(self.d, self.K)
+    self.phi        = lambda all_X : tc.tensor(0.0)
+    self.dxphi      = lambda all_X : tc.tensor(0.0)
 
-    umin, umax = 0, 5.0
-    self.tau = FinalTime - np.log(5/2)
-
-    # dimensions of the input/output data spaces 
-    self.N = 1
-    self.M = 1
-    
-    self.d = 1
-    self.K = 1
-    self.sizeu = 1
-    self.u_bound =  [(umin, umax)]  # min-max values 
-
-    # init data    
-    self.X0 = np.array([[2.0]])
-    self.XT = np.array([[0.0]])    # not used !
-    self.Xi = self.XT
-    
-    assert isinstance(self.X0, np.ndarray)
-    assert self.X0.ndim == 2
-    
-    self.T = FinalTime
-    
-    self.f   = lambda t, X, u : X + u
-    self.duf = lambda t, X, u : np.array([[[1.0]]])
-    self.dxf = lambda t, X, u : np.array([[[1.0]]])
-    self.dudxf = lambda t, X, u : np.zeros((self.K, self.sizeu, self.d, self.d))
-
-    self.phi_expr = 'Phi=0.0'
-    self.phi = lambda all_X, XT: 0.0
-    self.sum_phi = lambda all_X, XT: 0.0
-    self.dxphi = lambda all_X, XT : np.array([[0.0]])
-    
-    self.L = lambda X, u, u0 : 3*u - 2*X
-    self.duL = lambda X, u, u0 : np.array([[3.0]])
-    self.dxL = lambda X, u, u0 : np.array([[-2.0]])
-    self.dudxL = lambda X, u : np.array([0.0])
-
-    self.x_true = lambda t : (umax + self.X0 )*np.exp(t)-umax if t < self.tau \
-      else ((umax+self.X0) * np.exp(self.tau) - umax + umin) * np.exp(t-self.tau) - umin
-
+    # Exact solns
+    self.x_true = lambda t : (umax + self.xhat.numpy().squeeze() )*np.exp(t) - umax if t < self.tau \
+      else ((umax + self.xhat.numpy().squeeze()) * np.exp(self.tau) - umax + umin) * np.exp(t-self.tau) - umin
     self.u_true = lambda t : umax if t < self.tau else umin
-
     
-  # 
-  def plot_prediction(self, algo, ax = None, cax = None, fig = None):
+    # Regularization part
+    self.L          = lambda X, u : eta * (3*u - 2*X)
+
+    # Live Plot
+  def draw_plot(self, mesh, all_X, all_u, all_J, axs):
     """
-    input : algo, ax, number of test points 
-    output : test inputs for plottings x_in and x_out 
-    """  
-
-    x_in  = algo.mesh_X.points
-    x_out = np.zeros(algo.mesh_X.n)
-    x_e   = np.zeros(algo.mesh_X.n)
+    Draw the state and the control
+    """
     
-    for it,t in enumerate(x_in):
-      x_out[it] = algo.all_X[it, 0, 0]
-      x_e[it]   = self.x_true(t).squeeze()
+    axs[0].cla()
+    axs[1].cla()
+    axs[2].cla()
+    
+    axs[0].plot(mesh.points, all_u.detach().numpy()[:,0,0].squeeze(), '-', label=r'$u(t)$')
+    axs[0].plot(mesh.points, [self.u_true(t) for t in mesh.points], 'x', label=r'$u*(t)$')
 
-    if ax is not None:
-      ax.cla()
-      ax.set_title('Fonction X')
-      ax.set_xlabel(r'Time $t$')
-      ax.set_ylabel(r'$X_t$')
-      ax.plot(x_in, x_out, 'x')
-      ax.plot(x_in, x_e,   '-')
-      
-    return x_in, x_out
+    axs[1].plot(mesh.points, all_X.detach().numpy()[:,0,0].squeeze(), '--', label=r'$X_u(t)$')
+    axs[1].plot(mesh.points, [self.x_true(t) for t in mesh.points], 'o', label=r'$X_{u*}(t)$')
 
-  
-  # plot controls
-  def plot_U(self, algo, ax, title = 'Controls'):   
-    ax.cla()
-    ax.plot(algo.mesh_U.points, [self.u_true(t) for t in algo.mesh_U.points], '-', label='exact')
-    for j in range(self.sizeu):
-      ax.plot(algo.mesh_U.points, algo.u[:, j, 0],  'x-')
-    ax.set_title(title)
-    ax.set_xlabel(r'Time $t$')
-    ax.set_ylabel(r'$\theta^*_t$')
+    axs[2].plot(all_J)
+    
+    axs[0].legend()
+    axs[1].legend()

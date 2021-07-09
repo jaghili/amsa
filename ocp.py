@@ -59,17 +59,18 @@ class OptimalControlProblem:
     self.xhat       = None
     self.yhat       = None    
 
-  def solve(self, mesh, eta = 1.0, maxiter=100, learning_rate=0.1, u0=None):
+  def solve(self, mesh, maxiter=100, learning_rate=0.1, u0=None):
     """
     Solve the primal optimal control problem
     """
     
     plt.ion()
-    fig, axs = plt.subplots(1,2)
+    fig, axs = plt.subplots(1, 3)
   
     # Initialize
     print('Init control u')
 
+    all_J = list()
     all_u = u0.clone().detach().requires_grad_(True)
     optimizer = torch.optim.Adam([all_u], lr=learning_rate)
     #optimizer = torch.optim.SGD([all_u], lr=learning_rate)    
@@ -89,7 +90,8 @@ class OptimalControlProblem:
         X = X + mesh.h * self.f(t, X, u(t))
         all_X[j, :, :] = X
       
-      loss = self.phi(X) + eta*mesh.h*torch.sum(self.L(all_X, all_u))
+      loss = self.phi(X) + mesh.h * torch.sum(self.L(all_X, all_u))
+      all_J.append(loss.squeeze())
       #optimizer.zero_grad()
       loss.backward()
       optimizer.step()
@@ -97,7 +99,7 @@ class OptimalControlProblem:
       with torch.no_grad(): # all commands will skip grad computations
         all_u.clamp_(self.u_bound[0][0], self.u_bound[0][1])
 
-      self.draw_plot(mesh, all_X, all_u, axs)      
+      self.draw_plot(mesh, all_X, all_u, all_J, axs)      
       plt.draw()
       plt.pause(0.0001)
       

@@ -45,8 +45,6 @@ class ConvNet(OptimalControlProblem):
     print('Init ConvNet:')
     print('--------------------------------:')
     print(self.info)
-                                            
-
 
     def shaper(W, b): # Assume that W and b are torch tensors
       """
@@ -95,6 +93,7 @@ class ConvNet(OptimalControlProblem):
     def f(t, X, u):
       """
       Dynamic X'(t) = f(t,X,u)
+      - Assume u is a vector of size sizeu
       - Assume X is a matrix of size [K, d]
       - returns a vector of size [K, d]
 
@@ -113,6 +112,7 @@ class ConvNet(OptimalControlProblem):
       return tc.tanh(res + _b).reshape(K, d)
 
     self.f = f
+
     
     # Lagrangian
     self.L = lambda X, u, u0 : self.eta * 0.5 * tc.inner(u - u0,u - u0)
@@ -121,6 +121,6 @@ class ConvNet(OptimalControlProblem):
     
     # Cost
     self.phi_expr = str('0.5 * (sum(X^j(T)) - XT^j)')
-    self.phi = lambda batch_X, XT : (self.g(batch_X) - XT)**2         # size K
+    self.phi = lambda batch_X, XT : (self.g(batch_X) - XT)**2     # size K
     self.sum_phi = lambda batch_X, XT : tc.mean(self.phi(batch_X, XT))
     self.dxphi = lambda batch_X, XT : 2 * self.dxg(batch_X) * (self.g(batch_X) - XT).unsqueeze(0).T
